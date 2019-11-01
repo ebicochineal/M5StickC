@@ -222,7 +222,6 @@ public:
     
     int rtype = 0;
     
-    
     WireFrame () {}
     void init (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int rtype) {
         this->sx = sx;
@@ -283,9 +282,6 @@ public:
             } else {
                 this->obj.mesh->colors[i] = M5.Lcd.color565(n.x, n.y, n.z);
             }
-            
-            
-            
         }
         
         for (int i = 0; i < this->obj.mesh->v_size; ++i) {
@@ -296,41 +292,18 @@ public:
         
         this->clear();
         this->drawWire();
-        
-        // M5.Lcd.setAddrWindow(this->sx, this->sy, this->width, this->height);
-        // M5.Lcd.pushColors(this->buff, this->buffsize);
     }
     
     void clear () {
-        //M5.Lcd.fillRect(0, 0, this->width, this->height, 0);
-        
-        // M5.Lcd.setAddrWindow(this->sx, this->sy, this->width, this->height);
-        // M5.Lcd.pushColor(this->bgcolor, this->width*this->height);
-        
         for (int y = 0; y < this->height; ++y) {
             for (int x = 0; x < this->width; ++x) {
                 this->buff[y*this->width+x] = this->bgcolor;
                 this->zbuff[y*this->width+x] = 0;
             }
         }
-        
     }
     
     void drawWire () {
-        // for (int i = 0; i < this->obj.mesh->f_size; ++i) {
-        //     const Face& f = this->obj.mesh->faces[i];
-        //     const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
-        //     const Vector3& v1 = this->obj.mesh->tvertexs[f.y];
-        //     const Vector3& v2 = this->obj.mesh->tvertexs[f.z];
-            
-        //     if (!(Vector3::cross(v1 - v0, v2 - v1).z > 0)) { continue; }
-            
-        //     M5.Lcd.drawLine(v0.x, v0.y, v1.x, v1.y, M5.Lcd.color565(128, 128, 128));
-        //     M5.Lcd.drawLine(v1.x, v1.y, v2.x, v2.y, M5.Lcd.color565(128, 128, 128));
-        //     M5.Lcd.drawLine(v2.x, v2.y, v0.x, v0.y, M5.Lcd.color565(128, 128, 128));
-        // }
-        
-        
         for (int i = 0; i < this->obj.mesh->f_size; ++i) {
             const Face& f = this->obj.mesh->faces[i];
             const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
@@ -338,10 +311,6 @@ public:
             const Vector3& v2 = this->obj.mesh->tvertexs[f.z];
             
             if (Vector3::cross(v1 - v0, v2 - v1).z > 0) { continue; }
-            
-            // M5.Lcd.drawLine(v0.x, v0.y, v1.x, v1.y, this->linecolor);
-            // M5.Lcd.drawLine(v1.x, v1.y, v2.x, v2.y, this->linecolor);
-            // M5.Lcd.drawLine(v2.x, v2.y, v0.x, v0.y, this->linecolor);
             
             if (!((v0.z > 0 && v0.z < 1) || (v1.z > 0 && v1.z < 1) || (v2.z > 0 && v2.z < 1))) { continue; }
             if (!((v0.x >= 0 && v0.x < this->width) || (v1.x >= 0 && v1.x < this->width) || (v2.x >= 0 && v2.x < this->width))) { continue; }
@@ -355,12 +324,6 @@ public:
             // this->fillTriangle(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y, this->obj.mesh->colors[i], z);
         }
         
-        // for (int i = 0; i < this->obj.mesh->v_size; ++i) {
-        //     const Vector3& p = this->obj.mesh->tvertexs[i];
-        //     M5.Lcd.drawLine(p.x-2, this->sy+p.y, p.x+2, this->sy+p.y, M5.Lcd.color565(255, 127, 0));
-        //     M5.Lcd.drawLine(p.x, this->sy+p.y-2, p.x, this->sy+p.y+2, M5.Lcd.color565(255, 127, 0));
-            
-        // }
         
     }
     
