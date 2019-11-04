@@ -205,25 +205,22 @@ public:
 
 class WireFrame {
 public:
-    uint16_t* buff;
-    uint16_t* zbuff;
+    uint16_t* buff = NULL;
+    uint16_t* zbuff = NULL;
     int8_t sx = 0;
     int8_t sy = 0;
     int8_t ex = 0;
     int8_t ey = 0;
     uint16_t width, height;
     uint16_t buffsize = 0;
-    Matrix4x4 projscreen;
-    Matrix4x4 view;
     Object3D obj;
     Camera3D camera;
     uint16_t bgcolor = 0;
     uint16_t linecolor = 0;
     
-    int rtype = 0;
+    int render_type = 0;
     
-    WireFrame () {}
-    void init (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int rtype) {
+    WireFrame (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int render_type) {
         this->sx = sx;
         this->sy = sy;
         this->width = width;
@@ -234,64 +231,104 @@ public:
         this->bgcolor = bgcolor;
         this->linecolor = linecolor;
         this->obj.mesh = &mesh;
-        this->projscreen = Matrix4x4::projscreenMatrix(sx, sy, this->width, this->height);
         
-        this->buff = new uint16_t[this->buffsize];
-        this->zbuff = new uint16_t[this->buffsize];
-        
-        this->rtype = rtype;
+        this->render_type = render_type;
     }
     
-    // ~WireFrame () {
-    //     delete[] this->buff;
-    //     delete[] this->zbuff;
-    // }
+    ~WireFrame () {
+        delete[] this->buff;
+        delete[] this->zbuff;
+    }
     
     void draw () {
+        //
+        // this->obj.position.z = -12;
+        // this->obj.position.y = -1;
+        // this->obj.rotation.y = this->obj.rotation.y + 6;
+        
         this->obj.position.z = -6;
-        this->obj.position.y = 0;
         this->obj.rotation.y = this->obj.rotation.y + 6;
         
-        this->view = Matrix4x4::identity();
+        //
         
-        this->view = Matrix4x4::mul(this->view, Matrix4x4::rotMatrix(this->obj.rotation));
-        this->view = Matrix4x4::mul(this->view, Matrix4x4::movMatrix(this->obj.position));
         
-        // this->camera.position.y = 2;
-        // this->camera.rotation.x = this->camera.rotation.x - 0.1;
-        this->view = Matrix4x4::mul(this->view, Matrix4x4::rotMatrix(Vector3() - this->camera.rotation));
-        this->view = Matrix4x4::mul(this->view, Matrix4x4::movMatrix(Vector3() - this->camera.position));
-        
-        for (int i = 0; i < this->obj.mesh->v_size; ++i) {
-            Vector3 t = this->obj.mesh->vertexs[i];
-            t = Matrix4x4::mul(t, this->view);
-            this->obj.mesh->tvertexs[i] = t;
+        if (this->bnew) {
+            this->buff = new uint16_t[this->buffsize];
+            this->zbuff = new uint16_t[this->buffsize];
+            this->bnew = false;
         }
         
+        
+        this->clear();
+        
+        this->worldviewTransform();
+        
+        if (this->render_type == 0) {
+            this->projscreenTransform();
+            this->drawWire();
+        } else {
+            if (this->render_type == 1) {
+                this->polygonColor();
+            } else {
+                this->normalColor();
+            }
+            this->projscreenTransform();
+            this->drawPolygon();
+        }
+    }
+private:
+    bool bnew = true;
+    
+    void polygonColor () {
         for (int i = 0; i < this->obj.mesh->f_size; ++i) {
             const Face& f = this->obj.mesh->faces[i];
             const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
             const Vector3& v1 = this->obj.mesh->tvertexs[f.y];
             const Vector3& v2 = this->obj.mesh->tvertexs[f.z];
-            Vector3 n = Vector3::normalize(Vector3::cross(v1 - v0, v2 - v0));
-            const float d = min(max(Vector3::dot(Vector3(1.0f, 0.5f, 0.5f), n), 0.1f), 1.0f) * 255;
-            n = (n * 0.5f + 0.5f) * 255.0f;
-            
-            if (this->rtype == 0) {
-                this->obj.mesh->colors[i] = M5.Lcd.color565(d, d, d);
-            } else {
-                this->obj.mesh->colors[i] = M5.Lcd.color565(n.x, n.y, n.z);
-            }
+            const Vector3 n = Vector3::normalize(Vector3::cross(v1-v0, v2-v0));
+            const float d = min(max(Vector3::dot(Vector3(1.0f, 0.5f, 0.5f), n), 0.1f), 1.0f) * 255.0f;
+            this->obj.mesh->colors[i] = M5.Lcd.color565(d, d, d);
         }
+    }
+    
+    void normalColor () {
+        for (int i = 0; i < this->obj.mesh->f_size; ++i) {
+            const Face& f = this->obj.mesh->faces[i];
+            const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
+            const Vector3& v1 = this->obj.mesh->tvertexs[f.y];
+            const Vector3& v2 = this->obj.mesh->tvertexs[f.z];
+            const Vector3 n = (Vector3::normalize(Vector3::cross(v1-v0, v2-v0)) * 0.5f + 0.5f) * 255.0f;
+            this->obj.mesh->colors[i] = M5.Lcd.color565(n.x, n.y, n.z);
+        }
+    }
+    
+    void projscreenTransform () {
+        Matrix4x4 mat = Matrix4x4::projscreenMatrix(sx, sy, this->width, this->height);
         
         for (int i = 0; i < this->obj.mesh->v_size; ++i) {
             Vector3 t = this->obj.mesh->tvertexs[i];
-            t = Matrix4x4::mul(t, this->projscreen);
+            t = Matrix4x4::mul(t, mat);
             this->obj.mesh->tvertexs[i] = t;
         }
+    }
+    
+    void worldviewTransform () {
+        Matrix4x4 mat = Matrix4x4::identity();
         
-        this->clear();
-        this->drawWire();
+        // world
+        mat = Matrix4x4::mul(mat, Matrix4x4::rotMatrix(this->obj.rotation));
+        mat = Matrix4x4::mul(mat, Matrix4x4::movMatrix(this->obj.position));
+        
+        // viwe
+        mat = Matrix4x4::mul(mat, Matrix4x4::rotMatrix(Vector3() - this->camera.rotation));
+        mat = Matrix4x4::mul(mat, Matrix4x4::movMatrix(Vector3() - this->camera.position));
+        
+        // WorldViewTransform
+        for (int i = 0; i < this->obj.mesh->v_size; ++i) {
+            Vector3 t = this->obj.mesh->vertexs[i];
+            t = Matrix4x4::mul(t, mat);
+            this->obj.mesh->tvertexs[i] = t;
+        }
     }
     
     void clear () {
@@ -303,8 +340,7 @@ public:
         }
     }
     
-    void drawWire () {
-        for (int i = 0; i < this->obj.mesh->f_size; ++i) {
+    void drawWire () {for (int i = 0; i < this->obj.mesh->f_size; ++i) {
             const Face& f = this->obj.mesh->faces[i];
             const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
             const Vector3& v1 = this->obj.mesh->tvertexs[f.y];
@@ -319,12 +355,22 @@ public:
             this->drawBuffLine(v0.x, v0.y, v1.x, v1.y, this->linecolor);
             this->drawBuffLine(v1.x, v1.y, v2.x, v2.y, this->linecolor);
             this->drawBuffLine(v2.x, v2.y, v0.x, v0.y, this->linecolor);
-            
-            // uint16_t z = (1.0f-(v0.z+v1.z+v2.z)*0.333f) * 32767;
-            // this->fillTriangle(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y, this->obj.mesh->colors[i], z);
         }
-        
-        
+    }
+    
+    void drawPolygon () {for (int i = 0; i < this->obj.mesh->f_size; ++i) {
+            const Face& f = this->obj.mesh->faces[i];
+            const Vector3& v0 = this->obj.mesh->tvertexs[f.x];
+            const Vector3& v1 = this->obj.mesh->tvertexs[f.y];
+            const Vector3& v2 = this->obj.mesh->tvertexs[f.z];
+            
+            if (Vector3::cross(v1 - v0, v2 - v1).z > 0) { continue; }
+            if (!((v0.z > 0 && v0.z < 1) || (v1.z > 0 && v1.z < 1) || (v2.z > 0 && v2.z < 1))) { continue; }
+            if (!((v0.x >= 0 && v0.x < this->width) || (v1.x >= 0 && v1.x < this->width) || (v2.x >= 0 && v2.x < this->width))) { continue; }
+            if (!((v0.y >= 0 && v0.y < this->height) || (v1.y >= 0 && v1.y < this->height) || (v2.y >= 0 && v2.y < this->height))) { continue; }
+            uint16_t z = (1.0f-(v0.z+v1.z+v2.z)*0.333f) * 32767;
+            this->fillTriangle(v0.x, v0.y, v1.x, v1.y, v2.x, v2.y, this->obj.mesh->colors[i], z);
+        }
     }
     
     inline bool inSide (const int& x, const int& y) { return !(x < 0 || x >= this->width || y < 0 || y >= this->height); }
@@ -470,8 +516,8 @@ POSSIBILITY OF SUCH DAMAGE.
 
 class WindowManager {
 public:
-    uint16_t buff[12800];
-    WireFrame* wireframes[256];
+    uint16_t* buff;
+    WireFrame* wireframes[32];
     uint8_t wsize = 0;
     uint16_t width = 0;
     uint16_t height = 0;
@@ -480,10 +526,17 @@ public:
         this->width = width;
         this->height = height;
         this->buffsize = height * width;
+        this->buff = new uint16_t[this->buffsize];
     }
     
     void add (WireFrame& wf) {
         this->wireframes[this->wsize] = &wf;
+        this->wsize += 1;
+    }
+    
+    void add (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int rtype) {
+        WireFrame* wf = new WireFrame(sx, sy, width, height, bgcolor, linecolor, mesh, rtype);
+        this->wireframes[this->wsize] = wf;
         this->wsize += 1;
     }
     
@@ -504,85 +557,65 @@ public:
             }
         }
         
-        
-        
         M5.Lcd.setAddrWindow(0, 0, this->width, this->height);
         M5.Lcd.pushColors(this->buff, this->buffsize);
     }
-    
-
 };
 
-WindowManager windowmanager(160, 80);
+
+WindowManager wm(160, 80);
 
 Mesh mesh;
-WireFrame wf0;
-WireFrame wf1;
-WireFrame wf2;
-WireFrame wf3;
-WireFrame wf4;
-WireFrame wf21;
-WireFrame wf22;
-WireFrame wf23;
-WireFrame wf24;
-
+WireFrame wf0( 0,  0, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf1( 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf2(16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf3(32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf4(48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf21(32+ 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf22(32+16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf23(32+32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 0);
+WireFrame wf24(32+48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
 
 void setup() {
     M5.begin();
     M5.Lcd.setRotation(1);
     M5.Axp.ScreenBreath(8);
     
+    {
+        mesh.vertexs[0] = Vector3( 1.0f, -1.0f, -1.0f);
+        mesh.vertexs[1] = Vector3( 1.0f, -1.0f,  1.0f);
+        mesh.vertexs[2] = Vector3(-1.0f, -1.0f,  1.0f);
+        mesh.vertexs[3] = Vector3(-1.0f, -1.0f, -1.0f);
+        mesh.vertexs[4] = Vector3( 1.0f,  1.0f, -1.0f);
+        mesh.vertexs[5] = Vector3( 1.0f,  1.0f,  1.0f);
+        mesh.vertexs[6] = Vector3(-1.0f,  1.0f,  1.0f);
+        mesh.vertexs[7] = Vector3(-1.0f,  1.0f, -1.0f);
+        mesh.v_size = 8;
+        
+        mesh.faces[0]  = Face(1, 3, 0);
+        mesh.faces[1]  = Face(7, 5, 4);
+        mesh.faces[2]  = Face(4, 1, 0);
+        mesh.faces[3]  = Face(5, 2, 1);
+        mesh.faces[4]  = Face(2, 7, 3);
+        mesh.faces[5]  = Face(0, 7, 4);
+        mesh.faces[6]  = Face(1, 2, 3);
+        mesh.faces[7]  = Face(7, 6, 5);
+        mesh.faces[8]  = Face(4, 5, 1);
+        mesh.faces[9]  = Face(5, 6, 2);
+        mesh.faces[10] = Face(2, 6, 7);
+        mesh.faces[11] = Face(0, 3, 7);
+        mesh.f_size = 12;
+    }
     
-    mesh.vertexs[0] = Vector3( 1.0f, -1.0f, -1.0f);
-    mesh.vertexs[1] = Vector3( 1.0f, -1.0f,  1.0f);
-    mesh.vertexs[2] = Vector3(-1.0f, -1.0f,  1.0f);
-    mesh.vertexs[3] = Vector3(-1.0f, -1.0f, -1.0f);
-    mesh.vertexs[4] = Vector3( 1.0f,  1.0f, -1.0f);
-    mesh.vertexs[5] = Vector3( 1.0f,  1.0f,  1.0f);
-    mesh.vertexs[6] = Vector3(-1.0f,  1.0f,  1.0f);
-    mesh.vertexs[7] = Vector3(-1.0f,  1.0f, -1.0f);
-    mesh.v_size = 8;
-    
-    mesh.faces[0]  = Face(1, 3, 0);
-    mesh.faces[1]  = Face(7, 5, 4);
-    mesh.faces[2]  = Face(4, 1, 0);
-    mesh.faces[3]  = Face(5, 2, 1);
-    mesh.faces[4]  = Face(2, 7, 3);
-    mesh.faces[5]  = Face(0, 7, 4);
-    mesh.faces[6]  = Face(1, 2, 3);
-    mesh.faces[7]  = Face(7, 6, 5);
-    mesh.faces[8]  = Face(4, 5, 1);
-    mesh.faces[9]  = Face(5, 6, 2);
-    mesh.faces[10] = Face(2, 6, 7);
-    mesh.faces[11] = Face(0, 3, 7);
-    mesh.f_size = 12;
-    
-    // wf0.init( 0, 0, 80, 80, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    // wf1.init(80, 0, 80, 80, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 1);
-    
-    wf0.init( 0,  0, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    
-    wf1.init( 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    wf2.init(16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    wf3.init(32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    wf4.init(48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
-    
-    
-    wf21.init(32+ 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 1);
-    wf22.init(32+16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 1);
-    wf23.init(32+32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 1);
-    wf24.init(32+48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 1);
-    
-    
-    windowmanager.add(wf1);
-    windowmanager.add(wf2);
-    windowmanager.add(wf3);
-    windowmanager.add(wf4);
-    windowmanager.add(wf21);
-    windowmanager.add(wf22);
-    windowmanager.add(wf23);
-    windowmanager.add(wf24);
-    windowmanager.add(wf0);
+    wm.add(wf1);
+    wm.add(wf2);
+    wm.add(wf3);
+    wm.add(wf4);
+    wm.add(wf21);
+    wm.add(wf22);
+    wm.add(wf23);
+    wm.add(wf24);
+    wm.add(wf0);
     
     M5.MPU6886.Init();
 }
@@ -610,7 +643,7 @@ void loop() {
     wf0.sy = max(min(wf0.sy + y, 40), 0);
     
     
-    windowmanager.draw();
+    wm.draw();
     
     M5.Lcd.setCursor(0, 0);
     M5.Lcd.print(wf0.sx);
@@ -618,5 +651,4 @@ void loop() {
     M5.Lcd.print(wf0.sy);
     
     delay(16);
-    
 }
