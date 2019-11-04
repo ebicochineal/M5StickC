@@ -181,11 +181,116 @@ struct Mesh{
 public:
     uint16_t v_size = 0;
     uint16_t f_size = 0;
-    Vector3 vertexs[2048];
-    Face faces[2048];
-    Vector3 tvertexs[2048];
-    uint16_t colors[2048];
-    Mesh () {};
+    uint16_t array_v_size = 0;
+    uint16_t array_f_size = 0;
+    Vector3* vertexs = NULL;
+    Vector3* tvertexs = NULL;
+    Face* faces = NULL;
+    uint16_t* colors = NULL;
+    Mesh () {
+        this->vertexs = new Vector3[8];
+        this->tvertexs = new Vector3[8];
+        this->faces = new Face[8];
+        this->colors = new uint16_t[8];
+        this->array_v_size = 8;
+        this->array_f_size = 8;
+    };
+    
+    ~Mesh () {
+        delete[] this->vertexs;
+        delete[] this->tvertexs;
+        delete[] this->faces;
+        delete[] this->colors;
+    };
+    
+    Mesh (const Mesh& t) {
+        Vector3* vertexs = new Vector3[t.array_v_size];
+        Vector3* tvertexs = new Vector3[t.array_v_size];
+        Face* faces = new Face[t.array_f_size];
+        uint16_t* colors = new uint16_t[t.array_f_size];
+        for (int i = 0; i < t.v_size; ++i) { vertexs[i] = t.vertexs[i]; }
+        for (int i = 0; i < t.f_size; ++i) { faces[i] = t.faces[i]; }
+        this->v_size = t.v_size;
+        this->f_size = t.f_size;
+        this->array_v_size = t.array_v_size;
+        this->array_f_size = t.array_f_size;
+        this->vertexs = vertexs;
+        this->tvertexs = tvertexs;
+        this->faces = faces;
+        this->colors = colors;
+    }
+    
+    Mesh& operator = (const Mesh& t) {
+        Vector3* vertexs = new Vector3[t.array_v_size];
+        Vector3* tvertexs = new Vector3[t.array_v_size];
+        Face* faces = new Face[t.array_f_size];
+        uint16_t* colors = new uint16_t[t.array_f_size];
+        for (int i = 0; i < t.v_size; ++i) { vertexs[i] = t.vertexs[i]; }
+        for (int i = 0; i < t.f_size; ++i) { faces[i] = t.faces[i]; }
+        this->v_size = t.v_size;
+        this->f_size = t.f_size;
+        this->array_v_size = t.array_v_size;
+        this->array_f_size = t.array_f_size;
+        this->vertexs = vertexs;
+        this->tvertexs = tvertexs;
+        this->faces = faces;
+        this->colors = colors;
+        return *this;
+    }
+    
+    void addVertex (float x, float y, float z) { this->addVertex(Vector3(x, y, z)); }
+    
+    void addVertex (Vector3 v) {
+        if (this->v_size + 1 > this->array_v_size) {
+            if (this->array_v_size < 128) {
+                this->array_v_size += 8;
+            } else if (this->array_v_size < 512) {
+                this->array_v_size += 64;
+            } else {
+                this->array_v_size += 128;
+            }
+            Vector3* vertexs = new Vector3[this->array_v_size];
+            Vector3* tvertexs = new Vector3[this->array_v_size];
+            
+            for (int i = 0; i < this->v_size; ++i) { vertexs[i] = this->vertexs[i]; }
+            vertexs[this->v_size] = v;
+            delete[] this->vertexs;
+            delete[] this->tvertexs;
+            this->vertexs = vertexs;
+            this->tvertexs = tvertexs;
+            this->v_size += 1;
+        } else {
+            this->vertexs[this->v_size] = v;
+            this->v_size += 1;
+        }
+    }
+    
+    void addFace (uint16_t x, uint16_t y, uint16_t z) { this->addFace(Face(x, y, z)); }
+    void addFace (Face f) {
+        if (this->f_size + 1 > this->array_f_size) {
+            if (this->array_f_size < 128) {
+                this->array_f_size += 8;
+            } else if (this->array_f_size < 512) {
+                this->array_f_size += 64;
+            } else {
+                this->array_f_size += 128;
+            }
+            Face* faces = new Face[this->array_f_size];
+            uint16_t* colors = new uint16_t[this->array_f_size];
+            
+            for (int i = 0; i < this->f_size; ++i) { faces[i] = this->faces[i]; }
+            faces[this->f_size] = f;
+            delete[] this->faces;
+            delete[] this->colors;
+            this->faces = faces;
+            this->colors = colors;
+            this->f_size += 1;
+        } else {
+            this->faces[this->f_size] = f;
+            this->f_size += 1;
+        }
+    }
+    
 };
 
 struct Object3D {
@@ -514,19 +619,29 @@ POSSIBILITY OF SUCH DAMAGE.
     }
 };
 
+
 class WindowManager {
 public:
-    uint16_t* buff;
     WireFrame* wireframes[32];
     uint8_t wsize = 0;
     uint16_t width = 0;
     uint16_t height = 0;
-    uint16_t buffsize = 0;
+    uint64_t prev_time = 0;
+    // uint16_t* buff;
+    // uint16_t buffsize = 0;
+    
+    TFT_eSprite* tft_es_buff;
+    
     WindowManager (uint16_t width, uint16_t height) {
         this->width = width;
         this->height = height;
-        this->buffsize = height * width;
-        this->buff = new uint16_t[this->buffsize];
+        
+        // this->buffsize = height * width;
+        // this->buff = new uint16_t[this->buffsize];
+        
+        this->tft_es_buff = new TFT_eSprite(&M5.Lcd);
+        this->tft_es_buff->setColorDepth(16);
+        this->tft_es_buff->createSprite(width, height);
     }
     
     void add (WireFrame& wf) {
@@ -534,47 +649,69 @@ public:
         this->wsize += 1;
     }
     
-    void add (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int rtype) {
-        WireFrame* wf = new WireFrame(sx, sy, width, height, bgcolor, linecolor, mesh, rtype);
-        this->wireframes[this->wsize] = wf;
+    void add (int8_t sx, int8_t sy, uint8_t width, uint8_t height, uint16_t bgcolor, uint16_t linecolor, Mesh& mesh, int render_type) {
+        this->wireframes[this->wsize] = new WireFrame(sx, sy, width, height, bgcolor, linecolor, mesh, render_type);
         this->wsize += 1;
     }
     
-    void draw () {
-        for (int i = 0; i < this->buffsize; ++i) { this->buff[i] = 0; }
+    
+    void buffUpdate () {
+        // for (int i = 0; i < this->buffsize; ++i) { this->buff[i] = 0; }
+        // for (int i = 0; i < this->wsize; ++i) {
+        //     WireFrame& w = *this->wireframes[i];
+        //     w.draw();
+        //     for (int y = 0; y < w.height; ++y) {
+        //         const int16_t wy = w.sy+y;
+        //         if (wy < 0 || wy >= this->height) { continue; }
+        //         for (int x = 0; x < w.width; ++x) {
+        //             const int16_t wx = w.sx+x;
+        //             if (wx < 0 || wx >= this->width) { continue; }
+        //             this->buff[wx + wy * this->width] = w.buff[x + y*w.width];
+        //         }
+        //     }
+        // }
         
+        
+        
+        this->tft_es_buff->fillSprite(0);
         for (int i = 0; i < this->wsize; ++i) {
             WireFrame& w = *this->wireframes[i];
             w.draw();
-            for (int y = 0; y < w.height; ++y) {
-                const int16_t wy = w.sy+y;
-                if (wy < 0 || wy >= this->height) { continue; }
-                for (int x = 0; x < w.width; ++x) {
-                    const int16_t wx = w.sx+x;
-                    if (wx < 0 || wx >= this->width) { continue; }
-                    this->buff[wx + wy * this->width] = w.buff[x + y*w.width];
-                }
-            }
+            this->tft_es_buff->pushImage(w.sx, w.sy, w.width, w.height, w.buff);
         }
+    }
+    
+    void screenDraw () {
+        // M5.Lcd.setAddrWindow(0, 0, this->width, this->height);
+        // M5.Lcd.pushColors(this->buff, this->buffsize);
         
-        M5.Lcd.setAddrWindow(0, 0, this->width, this->height);
-        M5.Lcd.pushColors(this->buff, this->buffsize);
+        
+        this->tft_es_buff->pushSprite(0, 0);
+    }
+    
+    
+    void fixedDraw () {
+        this->buffUpdate();
+        uint64_t t = millis();
+        while (t - this->prev_time < 33) {
+            delay(1);
+            t = millis();
+        }
+        this->prev_time = t;
+        screenDraw();
+    }
+    
+    void reDraw () {
+        this->buffUpdate();
+        this->prev_time = millis();
+        screenDraw();
     }
 };
 
-
 WindowManager wm(160, 80);
 
-Mesh mesh;
-WireFrame wf0( 0,  0, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf1( 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf2(16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf3(32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf4(48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf21(32+ 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf22(32+16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf23(32+32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh, 0);
-WireFrame wf24(32+48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh, 0);
+Mesh mesh1;
+WireFrame wf0( 0,  0, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh1, 0);
 
 void setup() {
     M5.begin();
@@ -582,39 +719,39 @@ void setup() {
     M5.Axp.ScreenBreath(8);
     
     {
-        mesh.vertexs[0] = Vector3( 1.0f, -1.0f, -1.0f);
-        mesh.vertexs[1] = Vector3( 1.0f, -1.0f,  1.0f);
-        mesh.vertexs[2] = Vector3(-1.0f, -1.0f,  1.0f);
-        mesh.vertexs[3] = Vector3(-1.0f, -1.0f, -1.0f);
-        mesh.vertexs[4] = Vector3( 1.0f,  1.0f, -1.0f);
-        mesh.vertexs[5] = Vector3( 1.0f,  1.0f,  1.0f);
-        mesh.vertexs[6] = Vector3(-1.0f,  1.0f,  1.0f);
-        mesh.vertexs[7] = Vector3(-1.0f,  1.0f, -1.0f);
-        mesh.v_size = 8;
-        
-        mesh.faces[0]  = Face(1, 3, 0);
-        mesh.faces[1]  = Face(7, 5, 4);
-        mesh.faces[2]  = Face(4, 1, 0);
-        mesh.faces[3]  = Face(5, 2, 1);
-        mesh.faces[4]  = Face(2, 7, 3);
-        mesh.faces[5]  = Face(0, 7, 4);
-        mesh.faces[6]  = Face(1, 2, 3);
-        mesh.faces[7]  = Face(7, 6, 5);
-        mesh.faces[8]  = Face(4, 5, 1);
-        mesh.faces[9]  = Face(5, 6, 2);
-        mesh.faces[10] = Face(2, 6, 7);
-        mesh.faces[11] = Face(0, 3, 7);
-        mesh.f_size = 12;
+        mesh1.addVertex( 1.0f, -1.0f, -1.0f);
+        mesh1.addVertex( 1.0f, -1.0f,  1.0f);
+        mesh1.addVertex(-1.0f, -1.0f,  1.0f);
+        mesh1.addVertex(-1.0f, -1.0f, -1.0f);
+        mesh1.addVertex( 1.0f,  1.0f, -1.0f);
+        mesh1.addVertex( 1.0f,  1.0f,  1.0f);
+        mesh1.addVertex(-1.0f,  1.0f,  1.0f);
+        mesh1.addVertex(-1.0f,  1.0f, -1.0f);
+        mesh1.addFace(1, 3, 0);
+        mesh1.addFace(7, 5, 4);
+        mesh1.addFace(4, 1, 0);
+        mesh1.addFace(5, 2, 1);
+        mesh1.addFace(2, 7, 3);
+        mesh1.addFace(0, 7, 4);
+        mesh1.addFace(1, 2, 3);
+        mesh1.addFace(7, 6, 5);
+        mesh1.addFace(4, 5, 1);
+        mesh1.addFace(5, 6, 2);
+        mesh1.addFace(2, 6, 7);
+        mesh1.addFace(0, 3, 7);
     }
     
-    wm.add(wf1);
-    wm.add(wf2);
-    wm.add(wf3);
-    wm.add(wf4);
-    wm.add(wf21);
-    wm.add(wf22);
-    wm.add(wf23);
-    wm.add(wf24);
+    wm.add( 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    
+    
+    wm.add(32+ 0,  0, 40, 40, M5.Lcd.color565(140, 32, 55), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(32+16, 16, 40, 40, M5.Lcd.color565(160, 36, 65), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(32+32, 32, 40, 40, M5.Lcd.color565(180, 40, 75), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    wm.add(32+48, 48, 40, 40, M5.Lcd.color565(200, 44, 85), M5.Lcd.color565(200, 200, 200), mesh1, 0);
+    
     wm.add(wf0);
     
     M5.MPU6886.Init();
@@ -643,12 +780,10 @@ void loop() {
     wf0.sy = max(min(wf0.sy + y, 40), 0);
     
     
-    wm.draw();
+    wm.fixedDraw();
     
     M5.Lcd.setCursor(0, 0);
     M5.Lcd.print(wf0.sx);
     M5.Lcd.print(", ");
     M5.Lcd.print(wf0.sy);
-    
-    delay(16);
 }
