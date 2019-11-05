@@ -718,13 +718,13 @@ public:
             t = millis();
         }
         this->prev_time = t;
-        screenDraw();
+        this->screenDraw();
     }
     
     void reDraw () {
         this->buffUpdate();
         this->prev_time = millis();
-        screenDraw();
+        this->screenDraw();
     }
 };
 
