@@ -1,3 +1,6 @@
+#ifndef E512W3D_H
+#define E512W3D_H
+
 #include <M5StickC.h>
 
 template <class T>
@@ -5,7 +8,6 @@ class E512Array {
 private:
     uint16_t array_size = 0;
     uint16_t max_array_size = 8;
-    uint16_t cnt = 0;
 public:
     T* a;
     
@@ -58,6 +60,31 @@ public:
     }
     void push_back (T t) { this->emplace_back(t); }
     
+    void erase_index (T t) {
+        uint16_t tcnt = 0;
+        for (uint16_t i = 0; i < this->array_size; ++i) {
+            if (i != t) {
+                this->a[tcnt] = this->a[i];
+                tcnt += 1;
+            }
+        }
+        this->array_size = tcnt;
+    }
+    
+    void erase_value (T t) {
+        uint16_t tcnt = 0;
+        for (uint16_t i = 0; i < this->array_size; ++i) {
+            if (this->a[i] != t) {
+                this->a[tcnt] = this->a[i];
+                tcnt += 1;
+            }
+        }
+        this->array_size = tcnt;
+    }
+    
+    T& front () { return this->a[0]; }
+    T& back () { return this->a[this->array_size - 1]; }
+    
     E512Array (const E512Array& t) {
         T* a = new T[t.max_array_size];
         for (int i = 0; i < t.array_size; ++i) { a[i] = t.a[i]; }
@@ -75,15 +102,13 @@ public:
         return *this;
     }
     
+    
     // indexer
     T& operator [] (uint16_t i) { return this->a[i]; }
     
     // range based for
-    T operator * () { return this->a[this->cnt]; }
-    void operator ++ () { ++this->cnt; }
-    bool operator != (E512Array&) { return this->cnt < this->array_size; }
-    E512Array begin() const { return *this; }
-    E512Array end() const { return *this; }
+    T* begin () { return &this->a[0]; }
+    T* end () { return &this->a[this->array_size]; }
 };
 
 struct Vector2 {
@@ -287,7 +312,13 @@ public:
 };
 
 
-
+enum RenderType {
+    WireFrame,
+    Polygon,
+    PolygonColor,
+    PolygonNormal,
+    
+};
 
 struct Object3D {
 public:
@@ -314,8 +345,6 @@ public:
     uint16_t* zbuff = NULL;
     int16_t sx = 0;
     int16_t sy = 0;
-    int16_t ex = 0;
-    int16_t ey = 0;
     uint16_t width, height;
     uint16_t buffsize = 0;
     E512Array<Object3D*> child;
@@ -329,8 +358,6 @@ public:
         this->width = width;
         this->height = height;
         this->buffsize = width * height;
-        this->ey = this->height + this->sy;
-        this->ex = this->width + this->sx;
         this->bgcolor = bgcolor;
     }
     
@@ -360,10 +387,11 @@ public:
                     this->projscreenTransform(c);
                     this->drawWire(c);
                 } else {
-                    if (c->render_type == 1) {
-                        this->polygonColor(c);
-                    } else {
-                        this->normalColor(c);
+                    if (c->render_type == RenderType::Polygon) {
+                        this->polygon(c);
+                    }
+                    if (c->render_type == RenderType::PolygonNormal) {
+                        this->polygonNormal(c);
                     }
                     this->projscreenTransform(c);
                     this->drawPolygon(c);
@@ -381,14 +409,15 @@ private:
             Matrix4x4 mat = this->worldMatrix(c, pmat);
             if (c->mesh != NULL) {
                 this->worldviewTransform(c, mat);
-                if (c->render_type == 0) {
+                if (c->render_type == RenderType::WireFrame) {
                     this->projscreenTransform(c);
                     this->drawWire(c);
                 } else {
-                    if (c->render_type == 1) {
-                        this->polygonColor(c);
-                    } else {
-                        this->normalColor(c);
+                    if (c->render_type == RenderType::Polygon) {
+                        this->polygon(c);
+                    }
+                    if (c->render_type == RenderType::PolygonNormal) {
+                        this->polygonNormal(c);
                     }
                     this->projscreenTransform(c);
                     this->drawPolygon(c);
@@ -398,7 +427,7 @@ private:
         }
     }
     
-    void polygonColor (Object3D* o) {
+    void polygon (Object3D* o) {
         for (int i = 0; i < o->mesh->faces.size(); ++i) {
             const Face& f = o->mesh->faces[i];
             const Vector3& v0 = o->mesh->tvertexs[f.x];
@@ -410,7 +439,7 @@ private:
         }
     }
     
-    void normalColor (Object3D* o) {
+    void polygonNormal (Object3D* o) {
         for (int i = 0; i < o->mesh->faces.size(); ++i) {
             const Face& f = o->mesh->faces[i];
             const Vector3& v0 = o->mesh->tvertexs[f.x];
@@ -728,3 +757,4 @@ public:
     }
 };
 
+#endif
